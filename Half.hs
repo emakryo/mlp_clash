@@ -43,6 +43,12 @@ fromSigned x = bundle (s3, e3, f3)
 --hadd x y = bundle (s3, e3, f3)
 --    where
 --    op1 = register 0 $ 
---
-topEntity :: Signal (Signed 16) -> Signal (BitVector 16)
-topEntity x = fmap pack $ fromSigned x
+
+{-# ANN topEntity
+   (defTop
+    { t_name = "clash_top"
+    , t_inputs = ["SW"]
+    , t_outputs = ["LED"]
+    }) #-}
+topEntity :: Signal (Signed 10) -> Signal (BitVector 10)
+topEntity x = fmap ((slice d15 d6) . pack) $ fromSigned $ fmap resize x
