@@ -45,7 +45,7 @@ fromSigned x = bundle (s3, e3, f3)
     abs2 = register 0 abs1
     lz2 = register 0 $ fmap (fromIntegral . countLeadingZeros) abs1 :: Signal (Unsigned 5)
     lz2' = fmap fromIntegral lz2
-    e2 = mux (fmap (==0) abs2) (signal 0) (30-lz2)
+    e2 = mux (abs2 .==. 0) (signal 0) (30-lz2)
     f2 = liftA2 shift abs2 (lz2'-5)
 
     s3 = register 0 $ s2
@@ -55,6 +55,7 @@ fromSigned x = bundle (s3, e3, f3)
 concat# :: KnownNat n => KnownNat m => Unsigned n -> Unsigned m -> Unsigned (n+m)
 concat# x y = unpack $ (pack x) ++# (pack y)
 
+-- 3 clock latency
 add# :: Signal Half -> Signal Half -> Signal Half
 add# a b = add3 $ add2 $ add1 a b
 
@@ -67,9 +68,9 @@ add1 a b = bundle (op1, s1, ea1, eb1, fa1, fb1, de1)
     op = liftA2 xor sa sb -- 0: add, 1: sub
     a' = liftA2 concat# ea fa
     b' = liftA2 concat# eb fb
-    cmp = liftA2 (>) a' b'
+    cmp = a' .>. b'
     op1 = register 0 op
-    s1 = register 0 $ mux (fmap (==0) op) sa (mux cmp sa sb)
+    s1 = register 0 $ mux (op .==. 0) sa (mux cmp sa sb)
     ea1 = register 0 $ mux cmp ea eb
     fa1 = register 0 $ mux cmp fa fb
     eb1 = register 0 $ mux cmp eb ea
@@ -83,10 +84,10 @@ add2 x = bundle (s2, e2, lz2, f2)
     (op1, s1, ea1, eb1, fa1, fb1, de1) = unbundle x
     fa' = fmap (\x -> unpack $ (1::BitVector 2) ++# (pack x)) fa1
     fb' = liftA2 (\x y-> unpack $ shiftR ((1::BitVector 2) ++# pack x) (fromIntegral y)) fb1 de1
-    f' = mux (fmap (==0) op1) (fa'+fb') (fa'-fb') :: Signal (Unsigned 12)
+    f' = mux (op1 .==. 0) (fa'+fb') (fa'-fb') :: Signal (Unsigned 12)
     lz = fmap (fromIntegral . countLeadingZeros) f' :: Signal (Unsigned 5)
     s2 = register 0 s1
-    e2 = register 0 $ mux (fmap (==0) ea1) 0 (ea1-lz+1)
+    e2 = register 0 $ mux (ea1 .==. 0) 0 (ea1-lz+1)
     lz2 = register 0 lz
     f2 = register 0 f'
 
@@ -96,12 +97,14 @@ add3 x = bundle (s3, e3, f3)
     (s2, e2, lz2, f2) = unbundle x
     f''p = liftA2 (\x y -> shift x $ fromIntegral (y - 1)) f2 lz2
     f''0 = fmap (\x -> shiftR x 1) f2
-    f'' = mux (fmap (==0) lz2) f''0 f''p
+    f'' = mux (lz2 .==. 0) f''0 f''p
     s3 = register 0 s2
-    e3 = register 0 $ mux (fmap (==0) f2) 0 e2
+    e3 = register 0 $ mux (f2 .==. 0) 0 e2
     f3 = register 0 $ fmap (unpack . slice d9 d0) f'' :: Signal (Unsigned 10)
 
-test binop (xs::[Double]) (ys::[Double]) = zs -- fmap (\x -> (x, toFloating x)) zs
+test1 unop xs = sampleN (L.length xs) $ simulate unop $ fmap toHalf xs
+
+test2 binop (xs::[Double]) (ys::[Double]) = zs
     where
     binop' (x :: Signal (BitVector 32)) =
         let (a, b) = unbundle (fmap split x)
