@@ -3,25 +3,19 @@ module Half where
 import CLaSH.Prelude
 import GHC.List as L
 
+-- Half = (sign, exponent, fraction)
 type Half = (Bit, Unsigned 5, Unsigned 10)
-
-sign :: Half -> Bit
-sign (s, _, _) = s
-expo :: Half -> Unsigned 5
-expo (_, e, _) = e
-frac :: Half -> Unsigned 10
-frac (_, _, f) = f
 
 -- NB. non-synthesizable
 toFloating :: Floating f => Half -> f
-toFloating x
+toFloating (sign, expo, frac)
     | e == 0 && f == 0 = 0
     | e == 0 = (-1)**b * 2**(-24) * f
     | otherwise = (-1)**b * 2**(e-25) * (f + 2**10)
     where
-    b = fromIntegral $ sign x
-    e = fromIntegral $ expo x
-    f = fromIntegral $ frac x
+    b = fromIntegral $ sign
+    e = fromIntegral $ expo
+    f = fromIntegral $ frac
 
 -- NB, non-synthesizable
 toHalf :: Floating a => RealFrac a => a -> Half
@@ -82,10 +76,11 @@ add2 :: Signal StAdd1 -> Signal StAdd2
 add2 x = bundle (s2, e2, lz2, f2)
     where
     (op1, s1, ea1, eb1, fa1, fb1, de1) = unbundle x
-    fa' = fmap (\x -> unpack $ (1::BitVector 2) ++# (pack x)) fa1
-    fb' = liftA2 (\x y-> unpack $ shiftR ((1::BitVector 2) ++# pack x) (fromIntegral y)) fb1 de1
+    one = 1 :: BitVector 2
+    fa' = fmap (\x -> unpack $ one ++# (pack x)) fa1
+    fb' = liftA2 (\x y-> unpack $ shiftR (one ++# pack x) (fromIntegral y)) fb1 de1
     f' = mux (op1 .==. 0) (fa'+fb') (fa'-fb') :: Signal (Unsigned 12)
-    lz = fmap (fromIntegral . countLeadingZeros) f' :: Signal (Unsigned 5)
+    lz = fmap (fromIntegral . countLeadingZeros) f'
     s2 = register 0 s1
     e2 = register 0 $ mux (ea1 .==. 0) 0 (ea1-lz+1)
     lz2 = register 0 lz
@@ -100,7 +95,7 @@ add3 x = bundle (s3, e3, f3)
     f'' = mux (lz2 .==. 0) f''0 f''p
     s3 = register 0 s2
     e3 = register 0 $ mux (f2 .==. 0) 0 e2
-    f3 = register 0 $ fmap (unpack . slice d9 d0) f'' :: Signal (Unsigned 10)
+    f3 = register 0 $ fmap (unpack . slice d9 d0) f''
 
 test1 unop xs = sampleN (L.length xs) $ simulate unop $ fmap toHalf xs
 
