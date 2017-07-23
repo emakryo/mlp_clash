@@ -157,6 +157,13 @@ binOpTest binop (xs::[Double]) (ys::[Double]) = zs
     f = pack . toHalf
     zs = sampleN (L.length xs) $ simulate binop' $ L.zipWith (\x y -> f x ++# f y) xs ys
 
+relu :: Signal Half -> Signal Half
+relu x = register (0, 0, 0) $ bundle (0, e1, f1)
+    where
+    (s, e, f) = unbundle x
+    e1 = mux (s .==. 0) e 0
+    f1 = mux (s .==. 0) f 0
+
 {-# ANN topEntity
    (defTop
     { t_name = "clash_top"
